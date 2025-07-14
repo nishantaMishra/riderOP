@@ -1,0 +1,6 @@
+id,type,from,to,date,time,seats,price,name,contact,notes
+"ride_1704110000_sample1","offering","New York","Boston","2024-01-15","09:00",3,25.00,"John Smith","john@email.com","Non-smoking car, can pick up near subway"
+"ride_1704110001_sample2","seeking","Boston","New York","2024-01-15","18:00",1,30.00,"Sarah Johnson","555-1234","Flexible on time, happy to share gas"
+"ride_1704110002_sample3","offering","San Francisco","Los Angeles","2024-01-16","07:30",2,45.00,"Mike Chen","mike.chen@gmail.com","Taking highway 101, pet-friendly"
+"ride_1704110003_sample4","seeking","Los Angeles","San Francisco","2024-01-16","16:00",2,40.00,"Emily Davis","emily.davis@yahoo.com","Looking for weekend trip"
+"ride_1704110004_sample5","offering","Chicago","Milwaukee","2024-01-17","14:00",4,15.00,"David Wilson","david.w@outlook.com","Regular weekly trip"
