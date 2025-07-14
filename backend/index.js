@@ -6,6 +6,9 @@ const bodyParser = require('body-parser');
 
 const jwt      = require('jsonwebtoken');
 const Twilio   = require('twilio');
+
+require('dotenv').config();
+const { TWILIO_SID, TWILIO_TOKEN, TWILIO_NUMBER } = process.env;
 const client   = new Twilio(TWILIO_SID, TWILIO_TOKEN);
 const JWT_SECRET = 'a-very-secret-key';  // move to env in prod
 
@@ -14,7 +17,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const dbPath = 'rides.db';
+const DB_PATH = 'rides.db';
 
 // GET /rides — always available, but mask contact for anonymous
 app.get('/rides', (req, res) => {
