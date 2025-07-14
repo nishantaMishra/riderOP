@@ -319,15 +319,19 @@ const sendEmailOTP = async (
     const isProduction = process.env.NODE_ENV === "production";
     const hasResendApiKey = process.env.RESEND_API_KEY;
 
-    // For development/demo, always log to console
+    // Log OTP details in non-production for easier debugging
     if (!isProduction) {
-      console.log(`📧 [DEMO] EMAIL OTP to ${email}: ${otp}`);
-      console.log(`📱 [DEMO] Purpose: ${purpose}`);
-      console.log(`📱 [DEMO] In production, this would be sent via Resend.com`);
-      return true;
+      console.log(`📧 [DEV] EMAIL OTP to ${email}: ${otp}`);
+      console.log(`📱 [DEV] Purpose: ${purpose}`);
+      if (!hasResendApiKey) {
+        console.log(
+          `📭 [DEV] Skipping real email send because RESEND_API_KEY is missing`,
+        );
+        return true;
+      }
+      console.log("📬 [DEV] Sending real email via Resend using API key");
     }
 
-    // Production email sending with Resend
     if (!hasResendApiKey) {
       console.error(
         "❌ RESEND_API_KEY not found. Please set up your Resend API key.",
