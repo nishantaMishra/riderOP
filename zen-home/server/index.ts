@@ -73,9 +73,14 @@ export function createServer() {
   app.delete("/api/rides/:rideId", deleteRide);
   app.get("/api/rides/check-updates", checkCSVUpdates);
 
-  // 404 handler for unknown routes
-  app.use((req, res) => {
-    res.status(404).json({ error: "Route not found" });
+  // 404 handler for unknown API routes. Let non-API requests fall through so
+  // Vite can serve the SPA during development.
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api/")) {
+      res.status(404).json({ error: "Route not found" });
+    } else {
+      next();
+    }
   });
 
   return app;
