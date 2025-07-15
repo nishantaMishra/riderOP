@@ -9,11 +9,9 @@ import {
 interface User {
   id: string;
   phoneNumber: string;
-  email: string;
   name: string;
   createdAt: string;
   isVerified: boolean;
-  emailVerified: boolean;
 }
 
 interface AuthContextType {
@@ -100,7 +98,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     logout,
     refreshAuth,
-    isAuthenticated: !!user && user.isVerified && user.emailVerified,
+    isAuthenticated: !!user && user.isVerified,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

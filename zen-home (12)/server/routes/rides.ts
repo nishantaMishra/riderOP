@@ -14,6 +14,7 @@ interface Ride {
   name: string;
   contact: string;
   notes?: string;
+  createdBy?: string; // User ID of the ride creator
 }
 
 const CSV_FILE_PATH = join(process.cwd(), "rides.csv");
@@ -64,7 +65,7 @@ const parseCSV = (content: string): Ride[] => {
     const values = parseCSVLine(line);
 
     if (values.length >= 10) {
-      // At least 10 fields required
+      // At least 10 fields required, 11th field (createdBy) is optional
       const ride: Ride = {
         id: values[0] || `ride_${Date.now()}_${i}`,
         type: (values[1] as "offering" | "seeking") || "offering",
@@ -77,6 +78,7 @@ const parseCSV = (content: string): Ride[] => {
         name: values[8] || "",
         contact: values[9] || "",
         notes: values[10] || "",
+        createdBy: values[11] || undefined, // User ID if available
       };
       rides.push(ride);
     }
@@ -86,7 +88,8 @@ const parseCSV = (content: string): Ride[] => {
 };
 
 const formatCSV = (rides: Ride[]): string => {
-  const header = "id,type,from,to,date,time,seats,price,name,contact,notes";
+  const header =
+    "id,type,from,to,date,time,seats,price,name,contact,notes,createdBy";
   const rows = rides.map((ride) => {
     // Properly escape quotes and handle commas in values
     const escapeField = (field: any): string => {
@@ -109,6 +112,7 @@ const formatCSV = (rides: Ride[]): string => {
       escapeField(ride.name),
       escapeField(ride.contact),
       escapeField(ride.notes),
+      escapeField(ride.createdBy || ""),
     ].join(",");
   });
 
@@ -117,7 +121,8 @@ const formatCSV = (rides: Ride[]): string => {
 
 const initializeCSVFile = (): void => {
   if (!existsSync(CSV_FILE_PATH)) {
-    const header = "id,type,from,to,date,time,seats,price,name,contact,notes\n";
+    const header =
+      "id,type,from,to,date,time,seats,price,name,contact,notes,createdBy\n";
     writeFileSync(CSV_FILE_PATH, header, "utf8");
     console.log("Created new CSV file:", CSV_FILE_PATH);
   }
@@ -143,6 +148,57 @@ const loadRidesFromFile = (): Ride[] => {
   }
 };
 
+// Helper function to verify authentication and get user info
+const verifyAuth = async (
+  req: any,
+): Promise<{ userId: string; userName: string } | null> => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const token = authHeader.substring(7);
+
+    // Load sessions and verify token
+    const SESSIONS_FILE_PATH = join(process.cwd(), "sessions.csv");
+    const USERS_FILE_PATH = join(process.cwd(), "users.csv");
+
+    const sessionsContent = readFileSync(SESSIONS_FILE_PATH, "utf8");
+    const sessionLines = sessionsContent.trim().split("\n");
+
+    for (let i = 1; i < sessionLines.length; i++) {
+      const sessionValues = parseCSVLine(sessionLines[i]);
+      if (sessionValues.length >= 3) {
+        const sessionToken = sessionValues[0];
+        const userId = sessionValues[1];
+        const expiresAt = sessionValues[2];
+
+        if (sessionToken === token && new Date(expiresAt) > new Date()) {
+          // Get user name
+          const usersContent = readFileSync(USERS_FILE_PATH, "utf8");
+          const userLines = usersContent.trim().split("\n");
+
+          for (let j = 1; j < userLines.length; j++) {
+            const userValues = parseCSVLine(userLines[j]);
+            if (userValues.length >= 5 && userValues[0] === userId) {
+              return {
+                userId: userValues[0],
+                userName: userValues[2],
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Auth verification error:", error);
+    return null;
+  }
+};
+
 export const getRides: RequestHandler = (req, res) => {
   try {
     initializeCSVFile();
@@ -156,11 +212,14 @@ export const getRides: RequestHandler = (req, res) => {
   }
 };
 
-export const addRide: RequestHandler = (req, res) => {
+export const addRide: RequestHandler = async (req, res) => {
   try {
     initializeCSVFile();
 
     console.log("Received new ride request:", req.body);
+
+    // Verify authentication to get user info
+    const auth = await verifyAuth(req);
 
     const { type, from, to, date, time, seats, price, name, contact, notes } =
       req.body;
@@ -186,6 +245,7 @@ export const addRide: RequestHandler = (req, res) => {
       name,
       contact,
       notes: notes || "",
+      createdBy: auth?.userId, // Store the user ID if authenticated
     };
 
     console.log("Adding new ride:", newRide);
@@ -211,6 +271,121 @@ export const addRide: RequestHandler = (req, res) => {
   } catch (error) {
     console.error("Error adding ride:", error);
     res.status(500).json({ error: "Failed to add ride" });
+  }
+};
+
+export const updateRide: RequestHandler = async (req, res) => {
+  try {
+    initializeCSVFile();
+
+    const auth = await verifyAuth(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { rideId } = req.params;
+    const { type, from, to, date, time, seats, price, name, contact, notes } =
+      req.body;
+
+    // Validate required fields
+    if (!type || !from || !to || !date || !time || !name || !contact) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const rides = loadRidesFromFile();
+    const rideIndex = rides.findIndex((r) => r.id === rideId);
+
+    if (rideIndex === -1) {
+      return res.status(404).json({ error: "Ride not found" });
+    }
+
+    const ride = rides[rideIndex];
+
+    // Check if user owns this ride
+    if (ride.createdBy !== auth.userId) {
+      return res
+        .status(403)
+        .json({ error: "You can only edit your own rides" });
+    }
+
+    // Update ride data
+    rides[rideIndex] = {
+      ...ride,
+      type,
+      from,
+      to,
+      date,
+      time,
+      seats: parseInt(seats) || 1,
+      price: parseFloat(price) || 0,
+      name,
+      contact,
+      notes: notes || "",
+    };
+
+    // Write back to CSV
+    const newContent = formatCSV(rides);
+    writeFileSync(CSV_FILE_PATH, newContent, "utf8");
+
+    // Update cache
+    cachedRides = rides;
+    const stats = statSync(CSV_FILE_PATH);
+    lastModifiedTime = stats.mtime.getTime();
+
+    console.log(`Ride ${rideId} updated by ${auth.userName}`);
+
+    res.json({ success: true, ride: rides[rideIndex] });
+  } catch (error) {
+    console.error("Error updating ride:", error);
+    res.status(500).json({ error: "Failed to update ride" });
+  }
+};
+
+export const deleteRide: RequestHandler = async (req, res) => {
+  try {
+    initializeCSVFile();
+
+    const auth = await verifyAuth(req);
+    if (!auth) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { rideId } = req.params;
+
+    const rides = loadRidesFromFile();
+    const rideIndex = rides.findIndex((r) => r.id === rideId);
+
+    if (rideIndex === -1) {
+      return res.status(404).json({ error: "Ride not found" });
+    }
+
+    const ride = rides[rideIndex];
+
+    // Check if user owns this ride
+    if (ride.createdBy !== auth.userId) {
+      return res
+        .status(403)
+        .json({ error: "You can only delete your own rides" });
+    }
+
+    // Remove ride from array
+    rides.splice(rideIndex, 1);
+
+    // Write back to CSV
+    const newContent = formatCSV(rides);
+    writeFileSync(CSV_FILE_PATH, newContent, "utf8");
+
+    // Update cache
+    cachedRides = rides;
+    const stats = statSync(CSV_FILE_PATH);
+    lastModifiedTime = stats.mtime.getTime();
+
+    console.log(`Ride ${rideId} deleted by ${auth.userName}`);
+
+    res.json({ success: true, message: "Ride deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting ride:", error);
+    res.status(500).json({ error: "Failed to delete ride" });
   }
 };
 
