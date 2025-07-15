@@ -75,13 +75,6 @@ export function createServer() {
 
   // 404 handler for unknown API routes. Let non-API requests fall through so
   // Vite can serve the SPA during development.
-  app.use((req, res, next) => {
-    if (req.path.startsWith("/api/")) {
-      res.status(404).json({ error: "Route not found" });
-    } else {
-      next();
-    }
-  });
 
   return app;
 }
